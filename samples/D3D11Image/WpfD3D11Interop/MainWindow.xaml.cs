@@ -35,11 +35,14 @@
             this.host.SizeChanged += new SizeChangedEventHandler(this.Host_SizeChanged);
         }
         
-        private static bool Init()
+        private bool Init()
         {
-            
-            bool initSucceeded = NativeMethods.InvokeWithDllProtection(() => NativeMethods.Init()) >= 0;
-            
+
+            //bool initSucceeded = NativeMethods.InvokeWithDllProtection(() => NativeMethods.Init()) >= 0;
+
+            IntPtr hwnd = new WindowInteropHelper(this).Handle;
+            bool initSucceeded = NativeMethods.InvokeWithDllProtection(() => NativeMethods.Init12(hwnd)) >= 0;
+
             if (!initSucceeded)
             {
                 MessageBox.Show("Failed to initialize.", "WPF D3D Interop", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -294,6 +297,9 @@
 
             [DllImport("D3DVisualization.dll", CallingConvention = CallingConvention.Cdecl)]
             public static extern int Init();
+
+            [DllImport("D3DVisualization.dll", CallingConvention = CallingConvention.Cdecl)]
+            public static extern int Init12(IntPtr hwnd);
 
             [DllImport("D3DVisualization.dll", CallingConvention = CallingConvention.Cdecl)]
             public static extern void Cleanup();

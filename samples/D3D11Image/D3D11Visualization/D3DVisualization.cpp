@@ -52,6 +52,20 @@ extern HRESULT __cdecl Init()
     return hr;
 }
 
+extern HRESULT __cdecl Init12(HWND hwnd)
+{
+    pApplication = new CCube12(hwnd);
+
+    HRESULT hr = S_OK;
+
+    if (FAILED(hr = pApplication->InitDevice()))
+    {
+        return hr;
+    }
+
+    return hr;
+}
+
 /// <summary>
 /// Cleanup global class instance
 /// </summary>
@@ -248,6 +262,7 @@ HRESULT CCube::InitDevice()
     };
     UINT numFeatureLevels = ARRAYSIZE(featureLevels);
 
+    // DX11デバイス生成
     for (UINT driverTypeIndex = 0; driverTypeIndex < numDriverTypes; ++driverTypeIndex)
     {
         hr = D3D11CreateDevice(NULL, driverTypes[driverTypeIndex], NULL, createDeviceFlags, featureLevels, numFeatureLevels,
@@ -409,7 +424,6 @@ HRESULT CCube::InitRenderTarget(void * pResource)
     {
         return hr;
     }
-
     ID3D11Texture2D * pOutputResource;
     hr = tempResource11->QueryInterface(__uuidof(ID3D11Texture2D), (void**)(&pOutputResource));
     if (FAILED(hr))
@@ -459,7 +473,7 @@ HRESULT CCube::Render(void * pResource, bool isNewSurface)
 
     // If we've gotten a new Surface, need to initialize the renderTarget.
     // One of the times that this happens is on a resize.
-    if ( isNewSurface )
+    //if ( isNewSurface )
     {
         m_pImmediateContext->OMSetRenderTargets(0, NULL, NULL);
         hr = InitRenderTarget(pResource);
