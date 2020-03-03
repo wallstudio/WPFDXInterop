@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3DVisualization.h" />
+    <ClInclude Include="d3dx12.h" />
     <ClInclude Include="DX11Utils.h" />
     <ClInclude Include="OrbitCamera.h" />
     <ClInclude Include="Resource.h" />
@@ -127,14 +128,18 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;DEBUG;PROFILE;_WINDOWS;D3DXFX_LARGEADDRESS_HANDLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>d3d11.lib;d3dcompiler.lib;d3dx11d.lib;d3dx9d.lib;dxerr.lib;dxguid.lib;winmm.lib;comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy d3dvisualization.fx "$(SolutionDir)x86\$(Configuration)\"</Command>
+      <Command>copy d3dvisualization.fx "$(SolutionDir)$(Platform)\$(Configuration)\"
+copy "$(WindowsSdkDir)Redist\D3D\$(PlatformTarget)\dxcompiler.dll" $(TargetDir)dxcompiler.dll
+copy "$(WindowsSdkDir)Redist\D3D\$(PlatformTarget)\dxil.dll" $(TargetDir)dxil.dll
+copy $(ProjectDir)*.hlsl $(TargetDir)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -142,14 +147,18 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;DEBUG;PROFILE;_WINDOWS;D3DXFX_LARGEADDRESS_HANDLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>d3d11.lib;d3dcompiler.lib;dxguid.lib;winmm.lib;comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy d3dvisualization.fx "$(SolutionDir)x64\$(Configuration)\"</Command>
+      <Command>copy d3dvisualization.fx "$(SolutionDir)$(Platform)\$(Configuration)\"
+copy "$(WindowsSdkDir)Redist\D3D\$(PlatformTarget)\dxcompiler.dll" $(TargetDir)dxcompiler.dll
+copy "$(WindowsSdkDir)Redist\D3D\$(PlatformTarget)\dxil.dll" $(TargetDir)dxil.dll
+copy $(ProjectDir)*.hlsl $(TargetDir)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">

@@ -5,6 +5,10 @@
 //------------------------------------------------------------------------------
 
 #include "D3DVisualization.h"
+#include <dxcapi.h>
+//#include <filesystem>
+//#pragma comment(lib, "dxcompiler.lib")
+#include <D3DCompiler.h>
 
 #ifndef DIRECTX_SDK
     using namespace DirectX;
@@ -125,17 +129,6 @@ extern HRESULT _cdecl SetCameraPhi(float phi)
 /// </summary>
 CCube::CCube()
 {
-	m_Height = 0;
-	m_Width = 0;
-
-    m_hInst = NULL;
-    m_featureLevel = D3D_FEATURE_LEVEL_11_0;
-    m_pd3dDevice = NULL;
-    m_pImmediateContext = NULL;
-    m_pVertexLayout = NULL;
-    m_pVertexBuffer = NULL;
-    m_pVertexShader = NULL;
-    m_pPixelShader = NULL;
 }
 
 /// <summary>
@@ -143,18 +136,6 @@ CCube::CCube()
 /// </summary>
 CCube::~CCube()
 {
-    if (m_pImmediateContext) 
-    {
-        m_pImmediateContext->ClearState();
-    }
-
-	SAFE_RELEASE(m_pIndexBuffer);
-    SAFE_RELEASE(m_pPixelShader);
-    SAFE_RELEASE(m_pVertexBuffer);
-    SAFE_RELEASE(m_pVertexLayout);
-    SAFE_RELEASE(m_pVertexShader);
-    SAFE_RELEASE(m_pImmediateContext);
-    SAFE_RELEASE(m_pd3dDevice);
 }
 
 
@@ -164,61 +145,7 @@ CCube::~CCube()
 /// <returns>S_OK for success, or failure code</returns>
 HRESULT CCube::LoadShaders()
 {
-	HRESULT hr = S_OK;
-
-	// Compile the pixel shader
-	ID3DBlob* pPSBlob = NULL;
-	hr = CompileShaderFromFile(L"D3DVisualization.fx", "PS", "ps_4_0", &pPSBlob);
-	if (FAILED(hr))
-	{
-		MessageBox(NULL,
-			L"The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.", L"Error", MB_OK);
-		return hr;
-	}
-
-	// Create the pixel shader
-	hr = m_pd3dDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), NULL, &m_pPixelShader);
-	pPSBlob->Release();
-	if (FAILED(hr))
-		return hr;
-
-	// Compile the vertex shader
-	ID3DBlob* pVSBlob = NULL;
-	hr = CompileShaderFromFile(L"D3DVisualization.fx", "VS", "vs_4_0", &pVSBlob);
-	if (FAILED(hr))
-	{
-		MessageBox(NULL,
-			L"The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.", L"Error", MB_OK);
-		return hr;
-	}
-
-	// Create the vertex shader
-	hr = m_pd3dDevice->CreateVertexShader(pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize(), NULL, &m_pVertexShader);
-	if (FAILED(hr))
-	{
-		pVSBlob->Release();
-		return hr;
-	}
-
-	// Define the input layout
-	D3D11_INPUT_ELEMENT_DESC layout[] =
-	{
-		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-	};
-	UINT numElements = ARRAYSIZE(layout);
-
-	// Create the input layout
-	hr = m_pd3dDevice->CreateInputLayout(layout, numElements, pVSBlob->GetBufferPointer(),
-		pVSBlob->GetBufferSize(), &m_pVertexLayout);
-	pVSBlob->Release();
-	if (FAILED(hr))
-		return hr;
-
-	// Set the input layout
-	m_pImmediateContext->IASetInputLayout(m_pVertexLayout);
-
-    return hr;
+	throw 0;
 }
 
 /// <summary>
@@ -227,132 +154,163 @@ HRESULT CCube::LoadShaders()
 /// <returns>S_OK for success, or failure code</returns>
 HRESULT CCube::InitDevice()
 {
-    HRESULT hr = S_OK;
+	ComPtr<ID3D12Debug> debug;
+	Ok(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)));
+	debug->EnableDebugLayer();
+	ComPtr<IDXGIFactory5> factory;
+	Ok(CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, IID_PPV_ARGS(&factory)));
+	ComPtr<IDXGIAdapter> adp;
+	Ok(factory->EnumAdapters(0, &adp));
+	DXGI_ADAPTER_DESC ad;
+	Ok(adp->GetDesc(&ad));
 
-	UINT createDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+	Ok(D3D12CreateDevice(adp.Get(), D3D_FEATURE_LEVEL_12_1, IID_PPV_ARGS(&m_device)));
+	Ok(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAlocator)));
+	Ok(m_device->CreateCommandList(
+		0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAlocator.Get(),
+		nullptr, IID_PPV_ARGS(&m_commandList)));
+	D3D12_COMMAND_QUEUE_DESC qd;
+	qd.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+	qd.NodeMask = 0;
+	qd.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+	qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+	Ok(m_device->CreateCommandQueue(&qd, IID_PPV_ARGS(&m_commandQueue)));
 
-    D3D_DRIVER_TYPE driverTypes[] =
-    {
-        D3D_DRIVER_TYPE_HARDWARE,
-        D3D_DRIVER_TYPE_WARP,
-        D3D_DRIVER_TYPE_REFERENCE,
-    };
-    UINT numDriverTypes = ARRAYSIZE(driverTypes);
-
-    // DX10 or 11 devices are suitable
-    D3D_FEATURE_LEVEL featureLevels[] =
-    {
-        D3D_FEATURE_LEVEL_11_0,
-        D3D_FEATURE_LEVEL_10_1,
-        D3D_FEATURE_LEVEL_10_0,
-    };
-    UINT numFeatureLevels = ARRAYSIZE(featureLevels);
-
-    for (UINT driverTypeIndex = 0; driverTypeIndex < numDriverTypes; ++driverTypeIndex)
-    {
-        hr = D3D11CreateDevice(NULL, driverTypes[driverTypeIndex], NULL, createDeviceFlags, featureLevels, numFeatureLevels,
-            D3D11_SDK_VERSION, &m_pd3dDevice, &m_featureLevel, &m_pImmediateContext);
-
-        if ( SUCCEEDED(hr) )
-        {
-			m_driverType = driverTypes[driverTypeIndex];
-			break;
-        }
-    }
-
-    if ( FAILED(hr) )
-    {
-        MessageBox(NULL, L"Could not create a Direct3D 10 or 11 device.", L"Error", MB_ICONHAND | MB_OK);
-        return hr;
-    }
-
-    hr = LoadShaders();
-
-    if ( FAILED(hr) )
-    {
-        MessageBox(NULL, L"Could not load shaders.", L"Error", MB_ICONHAND | MB_OK);
-        return hr;
-    }
-
-	// Create vertex buffer
-	SimpleVertex vertices[] =
+	// RootSignerute & PSO
 	{
-		{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 0.5f) },
-		{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 0.5f) },
-		{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 1.0f, 0.5f) },
-		{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 0.5f) },
-		{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(1.0f, 0.0f, 1.0f, 0.5f) },
-		{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT4(1.0f, 1.0f, 0.0f, 0.5f) },
-		{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 0.5f) },
-		{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 0.0f, 0.5f) },
-	};
-	D3D11_BUFFER_DESC bd;
-	ZeroMemory(&bd, sizeof(bd));
-	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.ByteWidth = sizeof(SimpleVertex)* 8;
-	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	bd.CPUAccessFlags = 0;
-	D3D11_SUBRESOURCE_DATA InitData;
-	ZeroMemory(&InitData, sizeof(InitData));
-	InitData.pSysMem = vertices;
-	hr = m_pd3dDevice->CreateBuffer(&bd, &InitData, &m_pVertexBuffer);
-	if (FAILED(hr))
-		return hr;
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psod = {};
 
-	// Set vertex buffer
-	UINT stride = sizeof(SimpleVertex);
-	UINT offset = 0;
-	m_pImmediateContext->IASetVertexBuffers(0, 1, &m_pVertexBuffer, &stride, &offset);
+		psod.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+		psod.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		psod.NumRenderTargets = 1;
+		psod.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psod.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+		psod.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+		psod.SampleDesc = { 1, 0 };
+		psod.SampleMask = UINT_MAX;
+		psod.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
-	// Create index buffer
-	WORD indices[] =
+		// Shader
+		ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
+		Ok(CompileShaderFromFile(L"D3DVisualization.fx", L"VS", L"vs_6_0", vsBlob, errorBlob));
+		Ok(CompileShaderFromFile(L"D3DVisualization.fx", L"PS", L"ps_6_0", psBlob, errorBlob));
+		psod.VS = CD3DX12_SHADER_BYTECODE(vsBlob.Get());
+		psod.PS = CD3DX12_SHADER_BYTECODE(psBlob.Get());
+		D3D12_INPUT_ELEMENT_DESC ied[] =
+		{
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(SimpleVertex, Pos), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA},
+			{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT,0, offsetof(SimpleVertex, Color), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA}
+		};
+		psod.InputLayout = { ied, _countof(ied) };
+
+		// Signiture
+		CD3DX12_ROOT_SIGNATURE_DESC rsd {};
+		CD3DX12_ROOT_PARAMETER rootParams[1];
+		rootParams[0].InitAsConstantBufferView(0);
+		rsd.Init(
+			_countof(rootParams), rootParams, 0, nullptr,
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+		ComPtr<ID3DBlob> sigBlob;
+		Ok(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1_0, &sigBlob, &errorBlob));
+		Ok(m_device->CreateRootSignature(
+			0, sigBlob->GetBufferPointer(), sigBlob->GetBufferSize(), IID_PPV_ARGS(&m_signeture)));
+		psod.pRootSignature = m_signeture.Get();
+		Ok(m_device->CreateGraphicsPipelineState(&psod, IID_PPV_ARGS(&m_pipeline)));
+	}
+
+	// Vertex
 	{
-		3, 1, 0,
-		2, 1, 3,
+		SimpleVertex vertices[] =
+		{
+			// pos, color
+			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 0.5f) },
+			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 0.5f) },
+			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 1.0f, 0.5f) },
+			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 0.5f) },
+			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(1.0f, 0.0f, 1.0f, 0.5f) },
+			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT4(1.0f, 1.0f, 0.0f, 0.5f) },
+			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 0.5f) },
+			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 0.0f, 0.5f) },
+		};
+		ComPtr<ID3D12Resource> vertexBuffer;
+		Ok(m_device->CreateCommittedResource(
+			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+			D3D12_HEAP_FLAG_NONE,
+			&CD3DX12_RESOURCE_DESC::Buffer(sizeof(vertices)),
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&vertexBuffer)));
+		void* pVertexBuffer;
+		CD3DX12_RANGE range(0, 0);
+		Ok(vertexBuffer->Map(0, &range, &pVertexBuffer));
+		memcpy(pVertexBuffer, &vertices, sizeof(vertexBuffer));
+		vertexBuffer->Unmap(0, nullptr);
+		m_vertexBufferView.BufferLocation = vertexBuffer->GetGPUVirtualAddress();
+		m_vertexBufferView.SizeInBytes = sizeof(vertices);
+		m_vertexBufferView.StrideInBytes = sizeof(SimpleVertex);
+	}
 
-		0, 5, 4,
-		1, 5, 0,
+	// Index
+	{
+		WORD indices[] =
+		{
+			3, 1, 0,  2, 1, 3,
+			0, 5, 4,  1, 5, 0,
+			3, 4, 7,  0, 4, 3,
+			1, 6, 5,  2, 6, 1,
+			2, 7, 6,  3, 7, 2,
+			6, 4, 5,  7, 4, 6,
+		};
+		ComPtr<ID3D12Resource> indexBuffer;
+		Ok(m_device->CreateCommittedResource(
+			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+			D3D12_HEAP_FLAG_NONE,
+			&CD3DX12_RESOURCE_DESC::Buffer(sizeof(indices)),
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&indexBuffer)));
+		void* pIndexBuffer;
+		CD3DX12_RANGE range(0, 0);
+		Ok(indexBuffer->Map(0, &range, &pIndexBuffer));
+		memcpy(pIndexBuffer, &indices, sizeof(indices));
+		indexBuffer->Unmap(0, nullptr);
+		m_indexBufferView.BufferLocation = indexBuffer->GetGPUVirtualAddress();
+		m_indexBufferView.SizeInBytes = sizeof(indices);
+		m_indexBufferView.Format = DXGI_FORMAT_R32_UINT;
+	}
 
-		3, 4, 7,
-		0, 4, 3,
+	// Constant (WVP)
+	{
+		ConstantBuffer constat;
+		constat.mWorld= XMMATRIX();
+		constat.mView = XMMATRIX();
+		constat.mProjection = XMMATRIX();
+		int alignedCbSize = (sizeof(ConstantBuffer) + 255) & ~255;
+		Ok(m_device->CreateCommittedResource(
+			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+			D3D12_HEAP_FLAG_NONE,
+			&CD3DX12_RESOURCE_DESC::Buffer(alignedCbSize),
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&m_constantBuffer)));
+		void* pConstantBuffer;
+		CD3DX12_RANGE range(0, 0);
+		Ok(m_constantBuffer->Map(0, &range, &pConstantBuffer));
+		memcpy(pConstantBuffer, &constat, sizeof(ConstantBuffer));
+		m_constantBuffer->Unmap(0, nullptr);
+		D3D12_DESCRIPTOR_HEAP_DESC cbvhd;
+		cbvhd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+		cbvhd.NodeMask = 0;
+		cbvhd.NumDescriptors = 1;
+		cbvhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+		Ok(m_device->CreateDescriptorHeap(&cbvhd, IID_PPV_ARGS(&m_cbDescHeap)));
+		m_constantBufferView.BufferLocation = m_constantBuffer->GetGPUVirtualAddress();
+		m_constantBufferView.SizeInBytes = alignedCbSize;
+		m_device->CreateConstantBufferView(&m_constantBufferView, m_cbDescHeap->GetCPUDescriptorHandleForHeapStart());
 
-		1, 6, 5,
-		2, 6, 1,
+	}
 
-		2, 7, 6,
-		3, 7, 2,
-
-		6, 4, 5,
-		7, 4, 6,
-	};
-	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.ByteWidth = sizeof(WORD)* 36;        // 36 vertices needed for 12 triangles in a triangle list
-	bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
-	bd.CPUAccessFlags = 0;
-	InitData.pSysMem = indices;
-	hr = m_pd3dDevice->CreateBuffer(&bd, &InitData, &m_pIndexBuffer);
-	if (FAILED(hr))
-		return hr;
-
-	// Set index buffer
-	m_pImmediateContext->IASetIndexBuffer(m_pIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
-
-    // Set primitive topology
-	m_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-	// Create the constant buffer
-	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.ByteWidth = sizeof(ConstantBuffer);
-	bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	bd.CPUAccessFlags = 0;
-	hr = m_pd3dDevice->CreateBuffer(&bd, NULL, &m_pConstantBuffer);
-	if (FAILED(hr))
-		return hr;
-
-	// Initialize the world matrix
 	m_World = XMMatrixIdentity();
-
-	// Initialize the view matrix
 	XMVECTOR Eye = XMVectorSet(0.0f, 1.0f, -5.0f, 0.0f);
 	XMVECTOR At = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 	XMVECTOR Up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
@@ -364,14 +322,14 @@ HRESULT CCube::InitDevice()
 void CCube::SetUpViewport()
 {
 	// Setup the viewport
-	D3D11_VIEWPORT vp;
+	D3D12_VIEWPORT vp;
 	vp.Width = (float)m_Width;
 	vp.Height = (float)m_Height;
 	vp.MinDepth = 0.0f;
 	vp.MaxDepth = 1.0f;
 	vp.TopLeftX = 0;
 	vp.TopLeftY = 0;
-	m_pImmediateContext->RSSetViewports(1, &vp);
+	m_commandList->RSSetViewports(1, &vp);
 
 	// Initialize the projection matrix
 	m_Projection = XMMatrixPerspectiveFovLH(XM_PIDIV4, m_Width / (FLOAT)m_Height, 0.01f, 100.0f);
@@ -383,70 +341,64 @@ void CCube::SetUpViewport()
 /// <returns>S_OK for success, or failure code</returns>
 HRESULT CCube::InitRenderTarget(void * pResource)
 {
-    HRESULT hr = S_OK;
+	IUnknown* unknown = (IUnknown*)pResource;
+	unknown->QueryInterface(IID_PPV_ARGS(&pDXGIResource));
+	HANDLE sharedHandle;
+    Ok(pDXGIResource->GetSharedHandle(&sharedHandle));
+	Ok(m_device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(&rtResource)));
+	m_Width = rtResource->GetDesc().Width;
+	m_Height = rtResource->GetDesc().Height;
 
-    IUnknown *pUnk = (IUnknown*)pResource;
+	D3D12_DESCRIPTOR_HEAP_DESC rtvhd;
+	rtvhd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+	rtvhd.NodeMask = 0;
+	rtvhd.NumDescriptors = 1;
+	rtvhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+	Ok(m_device->CreateDescriptorHeap(&rtvhd, IID_PPV_ARGS(&m_rtvDescHeap)));
+	m_device->CreateRenderTargetView(
+		rtResource.Get(), nullptr,
+		m_rtvDescHeap->GetCPUDescriptorHandleForHeapStart());
 
-    IDXGIResource * pDXGIResource;
-    hr = pUnk->QueryInterface(__uuidof(IDXGIResource), (void**)&pDXGIResource);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
+	auto dsvHeapDesc = CD3DX12_RESOURCE_DESC::Tex2D(
+		DXGI_FORMAT_D32_FLOAT,
+		m_Width, m_Height,
+		1, // arraySize
+		0, // mipLv
+		1, // sampleCount
+		0, // sampleQuality
+		D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+	D3D12_CLEAR_VALUE dscv;
+	dscv.Format = dsvHeapDesc.Format;
+	dscv.DepthStencil.Depth = 1.0f;
+	dscv.DepthStencil.Stencil = 0.0f;
+	Ok(m_device->CreateCommittedResource(
+		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+		D3D12_HEAP_FLAG_NONE,
+		&dsvHeapDesc,
+		D3D12_RESOURCE_STATE_DEPTH_WRITE,
+		&dscv, IID_PPV_ARGS(&dsResource)));
 
-    HANDLE sharedHandle;
-    hr = pDXGIResource->GetSharedHandle(&sharedHandle);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
+	D3D12_DESCRIPTOR_HEAP_DESC dsvhd;
+	dsvhd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+	dsvhd.NodeMask = 0;
+	dsvhd.NumDescriptors = 1;
+	dsvhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+	Ok(m_device->CreateDescriptorHeap(&dsvhd, IID_PPV_ARGS(&m_dsvDescHeap)));
+	m_device->CreateDepthStencilView(
+		dsResource.Get(), nullptr,
+		m_dsvDescHeap->GetCPUDescriptorHandleForHeapStart());
 
-    pDXGIResource->Release();
+	SetUpViewport();
 
-    IUnknown * tempResource11;
-    hr = m_pd3dDevice->OpenSharedResource(sharedHandle, __uuidof(ID3D11Resource), (void**)(&tempResource11));
-    if (FAILED(hr))
-    {
-        return hr;
-    }
+	m_rtv = CD3DX12_CPU_DESCRIPTOR_HANDLE(
+		m_rtvDescHeap->GetCPUDescriptorHandleForHeapStart(), 0,
+		m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV));
+	m_dsv = CD3DX12_CPU_DESCRIPTOR_HANDLE(
+		m_dsvDescHeap->GetCPUDescriptorHandleForHeapStart(), 0,
+		m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV));
+	m_commandList->OMSetRenderTargets(1, &m_rtv, FALSE, &m_dsv);
 
-    ID3D11Texture2D * pOutputResource;
-    hr = tempResource11->QueryInterface(__uuidof(ID3D11Texture2D), (void**)(&pOutputResource));
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-    tempResource11->Release();
-
-    D3D11_RENDER_TARGET_VIEW_DESC rtDesc;
-    rtDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    rtDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-    rtDesc.Texture2D.MipSlice = 0;
-
-    hr = m_pd3dDevice->CreateRenderTargetView(pOutputResource, &rtDesc, &m_pRenderTargetView);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-
-    D3D11_TEXTURE2D_DESC outputResourceDesc;
-    pOutputResource->GetDesc(&outputResourceDesc);
-    if ( outputResourceDesc.Width != m_Width || outputResourceDesc.Height != m_Height )
-    {
-        m_Width = outputResourceDesc.Width;
-        m_Height = outputResourceDesc.Height;
-
-        SetUpViewport();
-    }
-
-    m_pImmediateContext->OMSetRenderTargets(1, &m_pRenderTargetView, NULL);
-
-    if ( NULL != pOutputResource )
-    {
-        pOutputResource->Release();
-    }
-
-    return hr;
+	return S_OK;
 }
 
 /// <summary>
@@ -461,12 +413,7 @@ HRESULT CCube::Render(void * pResource, bool isNewSurface)
     // One of the times that this happens is on a resize.
     if ( isNewSurface )
     {
-        m_pImmediateContext->OMSetRenderTargets(0, NULL, NULL);
-        hr = InitRenderTarget(pResource);
-        if (FAILED(hr))
-        {
-            return hr;
-        }
+        Ok(InitRenderTarget(pResource));
     }
 
 	// Update our time
@@ -484,37 +431,47 @@ HRESULT CCube::Render(void * pResource, bool isNewSurface)
 		t = (dwTimeCur - dwTimeStart) / 1000.0f;
 	}
 
-	//
-	// Animate the cube
-	//
-	m_World = XMMatrixRotationX(t) * XMMatrixRotationY(t);
-
-    // Clear the back buffer
+	// RT DS
+	m_commandList->OMSetRenderTargets(1, &m_rtv, FALSE, &m_dsv);
     static float ClearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    m_pImmediateContext->ClearRenderTargetView(m_pRenderTargetView, ClearColor);
+    m_commandList->ClearRenderTargetView(m_rtv, ClearColor, 0, nullptr);
 
     // Update the view matrix
+	m_World = XMMatrixRotationX(t) * XMMatrixRotationY(t);
     m_camera.Update();
-
     XMMATRIX viewProjection = XMMatrixMultiply(m_camera.View, m_Projection);
-	
 	ConstantBuffer cb;
 	cb.mWorld = XMMatrixTranspose(m_World);
 	cb.mView = XMMatrixTranspose(m_View);
 	cb.mProjection = XMMatrixTranspose(viewProjection);
-	m_pImmediateContext->UpdateSubresource(m_pConstantBuffer, 0, NULL, &cb, 0, 0);
+	void* pConstantBuffer;
+	CD3DX12_RANGE range(0, 0);
+	Ok(m_constantBuffer->Map(0, &range, &pConstantBuffer));
+	memcpy(pConstantBuffer, &cb, sizeof(ConstantBuffer));
+	m_constantBuffer->Unmap(0, nullptr);
 
 	// Renders a triangle
-	m_pImmediateContext->VSSetShader(m_pVertexShader, NULL, 0);
-	m_pImmediateContext->VSSetConstantBuffers(0, 1, &m_pConstantBuffer);
-	m_pImmediateContext->PSSetShader(m_pPixelShader, NULL, 0);
-	m_pImmediateContext->DrawIndexed(36, 0, 0);        // 36 vertices needed for 12 triangles in a triangle list
+	m_commandList->SetPipelineState(m_pipeline.Get());
+	m_commandList->SetGraphicsRootSignature(m_signeture.Get());
+	m_commandList->RSSetViewports(1, &CD3DX12_VIEWPORT(0.0f, 0.0f, float(m_Width), float(m_Height)));
+	m_commandList->RSSetScissorRects(1, &CD3DX12_RECT(0, 0, LONG(m_Width), LONG(m_Height)));
+	ID3D12DescriptorHeap* heap[] = { m_cbDescHeap.Get() };
+	m_commandList->SetDescriptorHeaps(_countof(heap), heap);
+	m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
+	m_commandList->IASetIndexBuffer(&m_indexBufferView);
+	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	m_commandList->SetGraphicsRootDescriptorTable(0, m_cbDescHeap->GetGPUDescriptorHandleForHeapStart());
+	m_commandList->DrawIndexedInstanced(36, 1, 0, 0, 0);
 
-    if ( NULL != m_pImmediateContext )
-    {
-        m_pImmediateContext->Flush();
-    }
+	ID3D12CommandList* lists[] = { m_commandList.Get() };
+	m_commandQueue->ExecuteCommandLists(1, lists);
 
+	ComPtr<ID3D12Fence1> fence;
+	Ok(m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)));
+	Ok(m_commandQueue->Signal(fence.Get(), 1));
+	HANDLE handle = CreateEvent(NULL, FALSE, FALSE, NULL);
+	fence->SetEventOnCompletion(1, handle);
+	WaitForSingleObject(handle, INFINITE);
     return 0;
 }
 

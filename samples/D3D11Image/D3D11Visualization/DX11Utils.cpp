@@ -21,7 +21,7 @@
 /// <param name="szShaderModel">shader model to compile for</param>
 /// <param name="ppBlobOut">holds result of compilation</param>
 /// <returns>S_OK for success, or failure code</returns>
-HRESULT CompileShaderFromFile(WCHAR* szFileName, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3D10Blob** ppBlobOut)
+HRESULT _CompileShaderFromFile(WCHAR* szFileName, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut)
 {
     HRESULT hr = S_OK;
 

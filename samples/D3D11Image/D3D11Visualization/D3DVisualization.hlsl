@@ -7,7 +7,7 @@
 //--------------------------------------------------------------------------------------
 // Constant Buffer Variables
 //--------------------------------------------------------------------------------------
-cbuffer ShaderParameter : register(b0)
+cbuffer ConstantBuffer : register(b0)
 {
     matrix World;
     matrix View;
@@ -21,22 +21,16 @@ struct VS_OUTPUT
     float4 Color : COLOR0;
 };
 
-struct VS_INPUT
-{
-    float4 Pos : POSITION;
-    float4 Color : COLOR;
-};
-
 //--------------------------------------------------------------------------------------
 // Vertex Shader
 //--------------------------------------------------------------------------------------
-VS_OUTPUT VS(VS_INPUT In)
+VS_OUTPUT VS(float4 Pos : POSITION, float4 Color : COLOR)
 {
     VS_OUTPUT output = (VS_OUTPUT)0;
-    output.Pos = mul(In.Pos, World);
+    output.Pos = mul(Pos, World);
     output.Pos = mul(output.Pos, View);
     output.Pos = mul(output.Pos, Projection);
-    output.Color = In.Color;
+    output.Color = Color;
     return output;
 }
 
